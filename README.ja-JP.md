@@ -1,7 +1,6 @@
 # git と posh-git のカスタムインストールスクリプト 
 
 GitHub デスクトップをインストールせずに、gitとposh-gitを直接インストールします。
-SSH経由でコミットできるようになります。
 
 ## このスクリプト実行後に次の機能が追加されます:
 
@@ -19,7 +18,6 @@ SSH経由でコミットできるようになります。
 - `$home\Documents\WindowsPowerShell\Profile.ps1` を次の通り作成するか追記します
 	- `poshgit.profile.ps1` を 実行します
 	- $env:Path に `C:\Program Files\Git\usr\bin` を追加します 
-- `.ssh\config`	に github
 - GitHubなどに登録するための公開鍵を表示します
 
 ## 次の点にご注意ください:
