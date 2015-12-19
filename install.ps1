@@ -1,21 +1,22 @@
-$encread  = $true
-$encname  = $null
-$encoding = $null
-while ($encread) {
-	try {
-		$encname  = Read-Host -Prompt 'Profile Encoding (Codepage / Webname)'
-		$encoding = [Text.Encoding]::GetEncoding($encname)
-		$encread  = $false
-	}
-	catch {
-		Write-Error "$encname is invalid"
-	}
-}
+$ErrorActionPreference = 'Stop' 
 
-$psdir    = "$home\Documents\WindowsPowerShell"
-$profile  = "$psdir\Profile.ps1"
-$gitbin   = 'C:\Program Files\Git\usr\bin'
-$idrsa    = "$home/.ssh/id_rsa"
+$utf8n   = new-object Text.Utf8Encoding
+$psdir   = "$home\Documents\WindowsPowerShell"
+$profile = "$psdir\Profile.ps1"
+$gitcmd  = "$env:ProgramFiles\Git\cmd"
+$gitbin  = "$env:ProgramFiles\Git\usr\bin"
+$idrsa   = "$home\.ssh\id_rsa"
+
+# ---------------------------------------------------------
+# confirm
+# ---------------------------------------------------------
+$ct = 'CHECK YOUR $OUTPUTENCODING TO PREVENT YOUR PROFILE FROM BEING BROKEN';
+$cm = 'Current $OutputEncoding is "{0}". If it wrong, abort this script and set correct encoding.' `
+	-f ($OutputEncoding.WebName)
+$co = new-object Management.Automation.Host.ChoiceDescription "&Continue"
+$ab = new-object Management.Automation.Host.ChoiceDescription "&Abort"
+$an = $host.UI.PromptForChoice($ct, $cm, ($co, $ab), 1)
+if ($an -ne 0) { exit }
 
 # ---------------------------------------------------------
 # init profile
@@ -27,11 +28,21 @@ if (-not (test-path $profile)) {
 	[IO.File]::WriteAllText($profile, '', $encoding);
 }
 
-function appendProfile{
+function appendProfile {
 	param($line)
-	if (([IO.File]::ReadAllLines($profile, $encoding) | ? { $_ -ieq $line }).Count -eq 0) {
-		[IO.File]::AppendAllText($profile, $line + "`r`n", $encoding);
+	try {
+		if (([IO.File]::ReadAllLines($profile, $OutputEncoding) | ? { $_ -ieq $line }).Count -eq 0) {
+			[IO.File]::AppendAllText($profile, $line + "`r`n", $OutputEncoding);
+		}
 	}
+	catch {
+		Write-Error $error	
+	}
+}
+function installScript {
+	param($src, $dest)
+	$lines = [IO.File]::ReadAllLines($src, $utf8n)
+	[IO.File]::WriteAllLines($dest, $lines, $OutputEncoding)
 }
 
 # ---------------------------------------------------------
@@ -39,22 +50,38 @@ function appendProfile{
 # ---------------------------------------------------------
 choco install git
 appendProfile ('$env:Path += ' + "';$gitbin'")
-$env:Path += ";$gitbin"
+
+$gitcmd, $gitbin | % {
+	if (-not (Test-Path $gitcmd)) {
+		Write-Error "`"$_`" is not found"
+		exit
+	}
+	$env:Path += ";" + $_
+}
 
 # ---------------------------------------------------------
 # poshgit
 # ---------------------------------------------------------
 choco install poshgit
 appendProfile '& "$PSScriptRoot\poshgit.profile.ps1"'
-copy $PSScriptRoot\poshgit.profile.ps1 $psdir -force
+installScript $PSScriptRoot\poshgit.profile.ps1 $psdir\poshgit.profile.ps1
 
 # ----------------------------------------------------------
 # ssh
 # ----------------------------------------------------------
-if (-not (test-path $idrsa)) {
+if (-not (Test-Path $idrsa)) {
 	ssh-keygen -t rsa -b 4096 -C "$env:COMPUTERNAME"
 }
 
-write-host "Register the following SSH public key via GitHub your account page:" `
- -foreground Yellow
+# ---------------------------------------------------------- 
+# user name
+# ----------------------------------------------------------
+
+Write-Host "ENTER YOUR GIT ACCOUNT: " -Foreground Yellow
+git config --global user.name  (Read-Host -Prompt 'User Name')
+git config --global user.email (Read-Host -Prompt 'Mail Address')
+
+Write-Host "REGISTER THE FOLLOWING SSH PUBLIC KEY VIA GITHUB YOUR ACCOUNT PAGE:" `
+ -Foreground Yellow
 type ($idrsa + ".pub")
+
